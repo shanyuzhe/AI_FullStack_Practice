@@ -43,9 +43,9 @@ def predict_test_data(model, test_filepath):
         "Survived": predictions
     })
     #不加行索引 kaggle要求的
-    submission.to_csv('submission.csv', index=False)
+    submission.to_csv('./dataset/submission.csv', index=False)
     
-    print("预测完成，结果已保存至 submission.csv")
+    print("预测完成，结果已保存至 ./dataset/submission.csv")
 
 class DiabetesDataset(Dataset):
     def __init__(self, filepath):
@@ -126,7 +126,7 @@ class Model(torch.nn.Module):
 
 # Windows 下多线程必须放在 if __name__ == '__main__': 下
 if __name__ == '__main__':
-    dataset = DiabetesDataset('train.csv')
+    dataset = DiabetesDataset('./dataset/train.csv')
     train_loader = DataLoader(dataset=dataset, 
                               batch_size=32,
                               shuffle=True,
@@ -215,7 +215,9 @@ DataLoader 会通过底层的 多进程管理机制（Multiprocessing），
             # Update
             optimizer.step()
         # 这样写最准确，无论你的数据集多大都能自动适配
-     
+        avg_loss = loss_sum / len(train_loader)
+        epoch_list.append(epoch)
+        loss_list.append(avg_loss)
     
     
     
@@ -228,4 +230,4 @@ DataLoader 会通过底层的 多进程管理机制（Multiprocessing），
     plt.show()
     
     # 训练结束后调用预测函数
-    predict_test_data(model, 'test.csv')
+    predict_test_data(model, './dataset/test.csv')

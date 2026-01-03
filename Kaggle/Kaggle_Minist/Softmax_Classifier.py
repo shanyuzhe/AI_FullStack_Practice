@@ -30,8 +30,7 @@ x_test_tensor  = (x_test_tensor - 0.1307) / 0.3081
 
 # 3. 标签转为 LongTensor
 y_train_tensor = torch.tensor(np.array(y_train_raw)).long()
-y_test_tensor  = torch.tensor(np.array(y_test_raw)).long()
-#torch.nn.CrossEntropyLoss()要求y是LongTensor
+y_test_tensor  = torch.tensor(np.array(y_test_raw)).long()#分类标签默认使用long
 
 # --- 第三步：封装为 DataLoader ---
 train_dataset = TensorDataset(x_train_tensor, y_train_tensor)
