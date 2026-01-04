@@ -73,6 +73,9 @@ class Net(torch.nn.Module):
         return x
 
 model = Net()
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+print("Using device:", device)
+model.to(device)
 
 # --- 5. 训练配置 ---
 criterion = torch.nn.CrossEntropyLoss()
@@ -83,6 +86,8 @@ def train(epoch):
     running_loss = 0.0
     for batch_idx, data in enumerate(train_loader, 0):
         inputs, target = data
+        inputs, target = inputs.to(device), target.to(device)
+
         optimizer.zero_grad()
         outputs = model(inputs)
         loss = criterion(outputs, target)
@@ -101,6 +106,8 @@ def test() -> float:
     with torch.no_grad():
         for data in test_loader:
             images, labels = data
+            images, labels = images.to(device), labels.to(device)
+
             outputs = model(images)
             _, predicted = torch.max(outputs.data, dim=1)# 获取每行最大值的索引 _代表值 predicted代表索引 最大值即为概率最大的地方
             total += labels.size(0)
