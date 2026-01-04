@@ -8,7 +8,7 @@ from net.cnn_net1 import CNN_Net1 as Net
 # --- 配置 ---
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 BATCH_SIZE = 64
-EPOCHS = 8
+EPOCHS = 5
 
 def main():
     # 1. 数据准备 (使用 torchvision)
@@ -44,6 +44,7 @@ def main():
 
     # 4. 保存与绘图
     torch.save(model.state_dict(), 'best_mnist.pth')
+    #model.state_dict意思是只保存模型参数，不保存整个模型结构
     plot_result(epoch_list, acc_list)
 
 def train(model, loader, optimizer, criterion, epoch):
