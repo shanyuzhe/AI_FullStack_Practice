@@ -53,10 +53,10 @@ PYTHONPATH=.
 ### Week 1: 维度直觉与张量操作
 
 * [x] **Day 0**: 🛠️ 环境搭建与 utils 工具库封装
-* [ ] **Day 1**: Tensor 基础 + Device 管理 (CPU/GPU)
-* [ ] **Day 2**: 维度变换大通关 (reshape/view/permute)
-* [ ] **Day 3**: 广播机制 (Broadcasting) 深度解析
-* [ ] **Day 4**: 高级索引 (Advanced Indexing) & Mask
+* [x] **Day 1**: Tensor 基础 + Device 管理 (CPU/GPU)
+* [x] **Day 2**: 维度变换大通关 (reshape/view/permute)
+* [x] **Day 3**: 广播机制 (Broadcasting) 深度解析
+* [x] **Day 4**: 高级索引 (Advanced Indexing) & Mask
 * [ ] **Day 5**: Einsum 爱因斯坦求和约定
 * [ ] **Day 6**: NumPy 与 PyTorch 的互转陷阱
 * [ ] **Day 7**: 🔄 **复盘**：输出维度变换速查表
@@ -100,8 +100,8 @@ PYTHONPATH=.
 
 ### Week 1: Collections 模块特训 (手感拉满)
 
-* [ ] **Day 1**: Counter (频次统计/异位词)
-* [ ] **Day 2**: defaultdict (分组/建图技巧)
+* [x] **Day 1**: Counter (频次统计/异位词)
+* [x] **Day 2**: defaultdict (分组/建图技巧)
 * [ ] **Day 3**: deque (队列/BFS/滑窗) —— *使用 `time_block` 验证 O(1) 优势*
 * [ ] **Day 4**: 排序技巧 (sorted key/lambda/元组)
 * [ ] **Day 5**: 综合小测 (Collections 混用)
