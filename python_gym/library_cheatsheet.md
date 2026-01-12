@@ -2,7 +2,9 @@
 
 ## 1. collections (容器神器)
 * **`Counter(iterable)`**: 统计词频。
-    * `Counter(s).most_common(k)`:哪怕只为了这个 API 也要用它。
+    * `Counter(s).most_common(k)`: 取出现频率最高的 k 个元素，返回列表。
+    * `Counter(a).subtract(b)`: 从 Counter(a) 中减去 Counter(b) 的元素，返回 None。保留负数
+    * `Counter(a) + Counter(b)`: 合并两个 Counter，返回一个新的 Counter。去掉负数和零。
 * **`defaultdict(type)`**: 自动处理键不存在的情况。
     * `d = defaultdict(list)`: 适合构建邻接表（图）。
     * `d = defaultdict(int)`: 适合计数（类似 Counter 但可动态加减）。

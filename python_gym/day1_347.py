@@ -19,13 +19,11 @@ class Solution:
     def solve(self, nums, k):
         cnt = Counter(nums)
         ans = []
-        for num in cnt:
-            print(num)
+        for num, frequency in cnt.most_common(k):
             ans.append(num)
         return ans
     #most_common解释：返回一个列表，列表中的元素是按频率从高到低排序的元组 (元素, 频率)
-    #遍历most_common(k)返回前k个高频元素
-
+    #cnt.items():按照元素的插入顺序返回所有元素及其频率的元组列表
 # --- 测试用例 ---
 if __name__ == "__main__":
     sol = Solution()
