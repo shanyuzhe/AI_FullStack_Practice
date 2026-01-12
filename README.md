@@ -10,7 +10,6 @@
 
 ---
 ## 📂 项目结构 (Project Structure)
-Plaintext
 
 AI_FULLSTACK/
 ├── 📜 .env                    # [关键] 环境变量配置 (PYTHONPATH=.)
@@ -28,13 +27,17 @@ AI_FULLSTACK/
 └── 📜 README.md               # 项目说明文档
 🌟 核心模块说明
 🔥 1. PyTorch 28 Days Challenges
-定位：深度学习核心概念的手写代码实验与底层逻辑复盘。 此处不仅仅是运行代码，而是通过 Self-made experimental 中的实验笔记，记录对 Broadcast、Softmax、Backprop 等核心机制的数学推导与代码验证，拒绝“调包侠”，追求“知其所以然”。
+定位：深度学习核心概念的手写代码实验与底层逻辑复盘。 此处不仅仅是运行代码，
+而是通过 Self-made experimental 中的实验笔记，
+记录对 Broadcast、Softmax、Backprop 等核心机制的数学推导与代码验证，拒绝“调包侠”，追求“知其所以然”。
 
 🐍 2. Python Gym
-定位：算法训练场。 针对 AI 工程师必须掌握的数据结构（如堆、图、树）进行专项训练，重点关注代码的向量化思维与时间复杂度优化。
+定位：算法训练场。 针对常用的数据结构（如堆、图、树）进行专项训练，
+重点关注代码的向量化思维与时间复杂度优化。
 
 🛠️ 3. Engineering Utils
-定位：工程化基础设施。 包含通用的环境检测、性能计时器与 Debug 检查清单，培养规范的工程开发习惯。
+定位：工程化基础设施。 包含通用的环境检测、
+性能计时器与 Debug 检查清单，培养规范的工程开发习惯。
 
 🚀 快速开始 (Quick Start)
 环境配置：
