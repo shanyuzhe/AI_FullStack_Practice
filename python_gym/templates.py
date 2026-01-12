@@ -4,7 +4,7 @@ Python 刷题通用模板库 (Day 0 建立)
 """
 import sys
 import heapq
-from collections import deque
+from collections import deque,defaultdict
 from typing import List
 
 # ==========================================
@@ -103,3 +103,27 @@ def heap_usage_demo():
     max_heap = [-x for x in [3, 1, 4]]
     heapq.heapify(max_heap)
     # 弹出最大值时，取负回来: -heapq.heappop(max_heap)
+    
+    
+# ==========================================
+# 5. o(N) 求和为K的子数组个数
+# ==========================================
+def subarraySum(self, nums: List[int], k: int) -> int:
+       
+        #mp = {0:1}
+        mp = defaultdict(int)
+        mp[0] = 1
+        cnt = 0
+        pre = 0 #前缀和
+        for num in nums:
+            pre += num
+            if (pre - k) in mp:
+                cnt += mp[pre - k]
+            
+            mp[pre] += 1
+            #普通字典的写法
+            #mp[pre] = mp.get(pre, 0) + 1
+            #value = 字典.get(key, default_value)
+            #找不到key的话返回default_value 避免访问空位置报错
+
+        return cnt
