@@ -2,6 +2,7 @@ import os
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+import math
 
 # -----------------------------------------------------------------------------
 # 1. 超参数设置 (Hyperparameters)
@@ -14,6 +15,8 @@ learning_rate = 1e-3 # 学习率 (稍微调低一点，加了Attention后网络�
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 eval_iters = 200
 n_embed = 32         # 嵌入维度 (每个token变成32个数字)
+num_heads = 4
+head_size = n_embed // num_heads
 
 print(f"Using device: {device}")
 
@@ -72,49 +75,61 @@ def estimate_loss():
     return out
 
 # -----------------------------------------------------------------------------
-# 4. 单头注意力模块 (Single Head Attention) - **新增部分**
+# 4. 多头注意力模块 (Multi Head Attention)
 # -----------------------------------------------------------------------------
-class Head(nn.Module):
-    """一个标准的自注意力头"""
-
-    def __init__(self, head_size):
+class MultiHeadSelfAttention(nn.Module):
+    def __init__(self, n_embed: int, n_head: int, dropout: float = 0.0):
         super().__init__()
-        # 定义 Q, K, V 的线性变换
-        # bias=False 是为了简化，通常也会加 bias
-        self.key = nn.Linear(n_embed, head_size, bias=False)
-        self.query = nn.Linear(n_embed, head_size, bias=False)
-        self.value = nn.Linear(n_embed, head_size, bias=False)
-        
-        # 定义掩码 (Tril)，用于不让模型看见“未来”
+        assert n_embed % n_head == 0
+        self.n_embed = n_embed
+        self.n_head = n_head
+        self.head_dim = n_embed // n_head
+
+        # 一次性算出 QKV（更工程化）
+        self.qkv = nn.Linear(n_embed, 3 * n_embed, bias=False)
+        self.proj = nn.Linear(n_embed, n_embed, bias=False)
+        self.dropout = nn.Dropout(dropout)
+
+        # [优化点] 使用 register_buffer 预先注册 Mask
+        # 定义一个下三角矩阵
         # register_buffer 表示这不是一个需要训练的参数，但它是模型状态的一部分
-        #定义一个下三角矩阵
-        self.register_buffer('tril', torch.tril(torch.ones(block_size, block_size)))
+        self.register_buffer("bias", torch.tril(torch.ones(block_size, block_size))
+                                     .view(1, 1, block_size, block_size))
 
     def forward(self, x):
+        # x: (B, T, C) ,C = n+embed = n_head * head_dim
         B, T, C = x.shape
-        # 1. 生成 Key 和 Query
-        k = self.key(x)   # (B, T, head_size)
-        q = self.query(x) # (B, T, head_size)
-
-        # 2. 计算注意力得分 (Scores)
-        # 这里的 transpose(-2, -1) 是为了把 (B, T, head_size) 转成 (B, head_size, T) 方便矩阵乘法
-        # * C**-0.5 是缩放因子 (Scaled Dot-Product Attention)
+        
+        qkv = self.qkv(x)              # (B, T, 3C)
+        q, k, v = qkv.split(C, dim=-1) # each: (B, T, C)
+        
+        # (B, T, C) ->(B, T, H, d)-> (B, H, T, d) 增加一个head维度
+        # 目的就是为了隔离不同组别的特征
+        # 如果不换的话，pytorch默认算最后两维，还是把各个head混在一起算
+        q = q.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
+        k = k.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
+        v = v.view(B, T, self.n_head, self.head_dim).transpose(1, 2)
+    
+        # (B, H, T, T)  一个head对应一组注意力得分[T,T] 特征维度消掉了
         # "q" 和 "k" 的点积 表示它们的相似度 即查询与键的匹配程度（注意力得分）
-        wei = q @ k.transpose(-2, -1) * C**-0.5 # (B, T_q, T_k)
-        #wei(1, 2, 3)表示第一批 序列第二个字的查询 对 第三个字的键的注意力得分
-        #但是其实是在向未来看 所以要掩码
-        
+        att = (q @ k.transpose(-2, -1)) / math.sqrt(self.head_dim)
 
-        # 3. 掩码 (Masking)
+        # [原始注释归位]
+        # wei(1, 2, 3)表示第一批 序列第二个字的查询 对 第三个字的键的注意力得分
+        # 但是其实是在向未来看 所以要掩码
+
+        # [优化点] 直接使用注册好的 buffer 进行掩码
+        # 如果attn_maxk为下三角矩阵 要在softmax之前掩码 使其不能关注未来信息
         # 将上三角区域（未来）设置为负无穷，softmax 后变为 0
-        wei = wei.masked_fill(self.tril[:T, :T] == 0, float('-inf'))
-
-        # 4. 归一化 (Softmax)
-        wei = F.softmax(wei, dim=-1) # (B, T, T)
-   
-        #下三角矩阵的含义是累加变换
+        att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float("-inf"))
         
-        #按照key的维度进行归一化 对于每一个query，所有key的权重和为1
+        # 4. 归一化 (Softmax)
+        att = F.softmax(att, dim=-1)
+        att = self.dropout(att)
+        
+        # [原始注释归位]
+        # 下三角矩阵的含义是累加变换
+        # 按照key的维度进行归一化 对于每一个query，所有key的权重和为1
         # Query (当前字) \ Key (历史字),
         # 我 (0),爱 (1),吃 (2),饭 (3),行总和
         #        1.0,0.0,0.0,0.0,1.0
@@ -122,32 +137,22 @@ class Head(nn.Module):
         # 吃 (2),0.1,0.2,0.7,0.0,1.0
         # 饭 (3),0.1,0.4,0.3,0.2,1.0
 
+        # 这里面是注意力得分矩阵 就是它告诉你：
+        # 为了读懂当前的这个字，我需要从前面已经看过的字里，分别提取多少信息？
+        # wei实际上就是一个加权累加变换 只是这里是用softmax实现的
 
-#这里面是注意力得分矩阵 就是它告诉你：
-#为了读懂当前的这个字，我需要从前面已经看过的字里，分别提取多少信息？
-#wei实际上就是一个加权累加变换 只是这里是用softmax实现的
+        # (B, H, T, d)
+        out = att @ v
+        # 根据注意力权重（概率），对所有 Value 进行加权求和。
+        # 按照关注度的高低，从 V 中“萃取”出当前字真正需要的信息
 
-# 参考：
-# #矩阵运算技巧
-# wei = torch.tril(torch.ones(T,T))#生成下三角矩阵 左乘的效果是按列累加和
-# wei = wei / wei.sum(1,keepdim=True)#使得行和唯一 左乘效果变成按列累加均值
-# xbow2 = wei @ x
-# torch.allclose(xbow,xbow2)
-# # 计算两个结果的最大差值
-# diff = (xbow - xbow2).abs().max()
-# print(f"最大误差: {diff.item()}")
+        # -> (B, H，T, d) -> (B, T, H, d) -> (B,T,C)
+        # transpose只改变stride 所以必须contiguous再view
+        out = out.transpose(1, 2).contiguous().view(B, T, C)
 
-#这里是求均值 但是注意力机制是加权均值
-# 也就是说 每个词对当前词的贡献度不一样
-
-
-
-
-
-
-        # 5. 聚合 Value（按照注意力得分加权求和）
-        v = self.value(x) # (B, T, head_size)
-        out = wei @ v     # (B, T, head_size)
+        out = self.proj(out)           # (B, T, C)
+        out = self.dropout(out)
+        
         return out
 
 # -----------------------------------------------------------------------------
@@ -164,18 +169,14 @@ class BigramLanguageModel(nn.Module):
         
         # 你眼中的 词w对应的 向量(w)：[w_1, w_2, w_3, ... w_32]这 32 个 $w$ 都是独立的、活生生的参数。
         # 当你反向传播时，会有 32 条不同的链路（偏导数）分别去指挥这 32 个数字如何变化。
-        
-        
         self.token_embedding_table = nn.Embedding(vocab_size, n_embed)
         
         # 2. Position Embedding: 记住每个字在句子里的位置 (T, n_embed)
         self.position_embedding_table = nn.Embedding(block_size, n_embed)
         
-        # 3. Self-Attention Head: **核心修改**
+        # 3. Multi Head Attention: **核心修改**
         # 这里创建一个注意力头，传入的参数是这个head要处理的向量维度
-        #这里由于只有一个head，所以head_size=n_embed
-        #如果有多个head 则head_size = n_embed // num_heads
-        self.sa_head = Head(n_embed)
+        self.sa_head = MultiHeadSelfAttention(n_embed=n_embed, n_head=num_heads, dropout=0.1)
         
         # 4. Language Model Head: 也就是最后的线性层，把向量变回词表概率
         # 输入 n_embed，输出 vocab_size
@@ -188,14 +189,15 @@ class BigramLanguageModel(nn.Module):
         # 获取 token 嵌入
         tok_emb = self.token_embedding_table(idx) # (B, T, n_embed)
         # 获取 位置 嵌入 (0, 1, 2... T-1)
-        pos_emb = self.position_embedding_table(torch.arange(T, device=device)) # (T, n_embed)
-        # 将两者相加，现在 x 既包含了“是什么字”，也包含了“在哪个位置”
         # 最开始pos_emb是随机初始化的，经过训练会学到位置编码
+        pos_emb = self.position_embedding_table(torch.arange(T, device=device)) # (T, n_embed)
         
+        # 将两者相加，现在 x 既包含了“是什么字”，也包含了“在哪个位置”
         x = tok_emb + pos_emb # (B, T, n_embed)
         
-        # --- Attention 阶段 (新增) ---
+        # --- Attention 阶段 ---
         # 让 token 之间开始交流，x 经过这层后，融合了上下文信息
+        # [优化点] 不再需要手动创建 mask 传进去了，模块内部处理
         x = self.sa_head(x) # (B, T, n_embed)
         
         # --- Decoding 阶段 ---
@@ -209,7 +211,7 @@ class BigramLanguageModel(nn.Module):
             logits = logits.view(B*T, C)
             targets = targets.view(B*T)
             loss = F.cross_entropy(logits, targets)
-
+            #pytorch只接受二维 第二维是待评估特征
         return logits, loss
 
     def generate(self, idx, max_new_tokens):
@@ -222,11 +224,14 @@ class BigramLanguageModel(nn.Module):
             
             # 这里的输入变成了 idx_cond
             logits, loss = self(idx_cond)
+           
             
             # 后面逻辑不变
-            logits = logits[:, -1, :] 
+            logits = logits[:, -1, :]#只看最后一个字
+            #logits:(B,T,vocab_size)  -> (B, vocal_size)
             probs = F.softmax(logits, dim=-1)
             idx_next = torch.multinomial(probs, num_samples=1)
+            #multinomial根据概率抽奖 num_samples是抽几次的参数
             idx = torch.cat((idx, idx_next), dim=1)
             
         return idx
@@ -236,9 +241,9 @@ class BigramLanguageModel(nn.Module):
 # -----------------------------------------------------------------------------
 # **注意**：实例化时必须传入 vocab_size
 model = BigramLanguageModel(vocab_size)
-m = model.to(device)
+model = model.to(device)
 
-optimizer = torch.optim.AdamW(m.parameters(), lr=learning_rate)
+optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
 print(f"开始训练 (max_iters={max_iters})...")
 
@@ -250,7 +255,7 @@ for iter in range(max_iters):
 
     xb, yb = get_batch("train")
 
-    logits, loss = m(xb, yb)
+    logits, loss = model(xb, yb)
     optimizer.zero_grad(set_to_none=True)
     loss.backward()
     optimizer.step()
@@ -258,10 +263,11 @@ for iter in range(max_iters):
 # 前馈：7000 个参数像齿轮一样咬合在一起，算出结果。
 # 反馈：算出每个齿轮对错误的“贡献度”（梯度）。
 # 优化：把这 7000 个齿轮，同时朝着各自正确的方向，微调一点点。
+
 # -----------------------------------------------------------------------------
 # 7. 生成测试
 # -----------------------------------------------------------------------------
 print("\n训练完成，生成示例文本：")
 context = torch.zeros((1, 1), dtype=torch.long, device=device)
-generated_indices = m.generate(idx=context, max_new_tokens=500)
-print(decode(generated_indices[0].tolist())  )  
+generated_indices = model.generate(idx=context, max_new_tokens=500)
+print(decode(generated_indices[0].tolist()))
