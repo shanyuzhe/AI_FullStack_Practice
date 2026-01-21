@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+test
+
 ## Project Overview
 
 This is a PyTorch deep learning learning repository focused on building foundational understanding of LLMs and Transformers from scratch. The project follows a "hardcore mode" approach - reimplementing core components rather than relying on high-level abstractions. The goal is to reach industrial R&D level (DeepSeek/OpenAI entry-level competency).
