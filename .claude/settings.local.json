@@ -12,7 +12,8 @@
       "Bash(scp:*)",
       "Bash(ssh:*)",
       "Bash(curl:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(du:*)"
     ]
   }
 }

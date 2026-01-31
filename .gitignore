@@ -4,3 +4,4 @@ data/
 __pycache__/
 .vscode/
 checkpoints/
+archive/RNN语言模型/aclImdb_v1/aclImdb/
