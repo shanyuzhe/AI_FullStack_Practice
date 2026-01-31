@@ -20,9 +20,8 @@ class RNN1(nn.Module):
     # 当一个单词进入模型，具体怎么处理
     def forward(self, word:torch.Tensor):
         # word shape [batch, max_word_length, embedding_length] (256, 20, 27)
-        # 第一维和第二维
         batch, Tx = word.shape[0:2]
-        # word shape [max_word_length, batch, embedding_length]
+        # 转换为 [max_word_length, batch, embedding_length]，便于循环
         word = torch.transpose(word, 0, 1)
         output = torch.empty_like(word)
         h = torch.zeros(batch, self.hidden_units, device=word.device)
@@ -38,20 +37,25 @@ class RNN1(nn.Module):
     @torch.no_grad() # 不需要推理，不需要计算梯度
     def language_model(self, word:torch.Tensor):
         batch, Tx = word.shape[0:2]
+        # 转换为 [max_word_length, batch, embedding_length]
         word = torch.transpose(word, 0, 1)
-        # 吧one-hot编码转化为编号
+        # one-hot 转为编号
         word_label = torch.argmax(word, 2)
         # output shape [batch]
         output = torch.ones(batch, device=word.device)
-        # 把h、x初始化
+        # 初始化h、x
         h = torch.zeros(batch, self.hidden_units, device=word.device)
         x = torch.zeros(batch, EMBEDDING_LENGTH, device=word.device)
         for i in range(Tx):
             next_h = self.tanh(self.linear_h(torch.cat((h, x),1)))
             # 想要一个具体的概率
             temp = self.linear_y(next_h)
-            hat_y = F.softmax(temp)
-            # 对batch中的每一个样本，取出模型在当前时间i上，对真实字符的预测概率
+            # tmp的形状是？ [batch, EMBEDDING_LENGTH]
+            tmp = temp
+            # 注意 经过softmax不会降维 而是把每个样本的每个类别概率分布都计算出来【0~1】
+            # hat_y形状：[batch, EMBEDDING_LENGTH]，即每个样本在当前时刻的所有类别概率分布
+            hat_y = F.softmax(tmp, dim=1)
+            # 查一下batch中的每一个样本，取出模型在当前时间i上，对真实字符的预测概率
             probs = hat_y[torch.arange(batch), word_label[i]]
             output *= probs
             x = word[i]
@@ -79,12 +83,28 @@ class RNN2(torch.nn.Module):
 
     def forward(self, word: torch.Tensor):
         # word shape: [batch, max_word_length]
-        batch, Tx = word.shape[0:2]
+        batch, Tx = word.shape[0:2]  # batch: 批量样本数量（多少个单词/序列）；Tx: 每个单词/序列的最大长度（时间步数）
+
+        # 这里 first_letter 用来给每个序列的第一个输入位置补0，实现错位
         first_letter = word.new_zeros(batch, 1)
+        # x 是将 first_letter 拼在原序列前面，并去掉原序列最后一个字符，实现“错位输入”
         x = torch.cat((first_letter, word[:, 0:-1]), 1)
+
+        # 初始化 RNN 的隐藏状态: 1（单层）× batch × 隐层维度
         hidden = torch.zeros(1, batch, self.hidden_units, device=word.device)
-        emb = self.drop(self.encoder(x))
-        output, hidden = self.rnn(emb, hidden)
+
+        emb = self.drop(self.encoder(x))          # 先查embedding再dropout
+        # output: (batch, Tx, hidden_units)；hidden: (1, batch, hidden_units)
+        output, hidden = self.rnn(emb, hidden)    
+        # 输入两个参数 emb和hidden，返回output和hidden emb是错位的输入 防止偷看
+        # emb: (batch, Tx, embeding_dim)
+        # hidden: (1, batch, hidden_units)
+        # output: (batch, Tx, hidden_units)
+        # hidden: (1, batch, hidden_units)
+        # output: 所有时间步输出（全程记忆）, hidden: 最后时刻隐藏状态
+
+        # 每个时间步都把output展平，方便decoder处理
+        # 展平后丢到decoder中，生成每个字符/时间步的分类分布
         y = self.decoder(output.reshape(batch * Tx, -1))
 
         return y.reshape(batch, Tx, -1)
@@ -96,7 +116,18 @@ class RNN2(torch.nn.Module):
         hat_y = F.softmax(hat_y, 2)
         output = torch.ones(batch, device=word.device)
         for i in range(Tx):
+            # 取出第i个时间步对应的预测概率
+            # hat_y的形状是 (batch, Tx, EMBEDDING_LENGTH)，
+            # word[:, i] 是每个样本在第i个时间步的真实词ID（shape: [batch]）
+            # hat_y[torch.arange(batch), i, word[:, i]] 相当于批量地，
+            # 从每个样本的第i步输出概率分布里，取出真实单词/字符对应的概率
+            # 得到一个形状为[batch]的向量
+    
             probs = hat_y[torch.arange(batch), i, word[:, i]]
+            # 合起来就是：
+            # 取出 (第0个样本, 第0时刻, 第0个字母A的概率)
+            # 取出 (第1个样本, 第0时刻, 第0个字母C的概率)
+            # 取出 (第2个样本, 第0时刻, 第0个字母B的概率)
             output *= probs
 
         return output

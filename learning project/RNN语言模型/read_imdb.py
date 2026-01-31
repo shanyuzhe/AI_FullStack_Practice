@@ -2,6 +2,7 @@ import os
 import re
 
 # 全量获取，从原文读取句子
+#相对路径 我的工作区就是在AI_FULLSTACK，这个是从工作区往下找
 def read_imdb(dir='data/aclImdb', split='pos', is_train=True):
     subdir = 'train' if is_train else 'test'
     dir = os.path.join(dir, subdir, split)
@@ -45,6 +46,10 @@ def read_imdb_vocab(dir='data/aclImdb'):
     fn = os.path.join(dir, 'imdb.vocab')
     with open(fn, 'rb') as f:
         word = f.read().decode('utf-8').replace('\n', ' ')
+        # 解释正则表达式：[^\u0020\u0061-\u007a]
+        # 这个正则的意思是：匹配所有“不是空格(Unicode码0020)和不是小写字母a-z(Unicode码0061-007a)”的字符。
+        # [^ ] 表示取反，\u0020是空格，\u0061-\u007a是a到z的小写字母区间。
+        # 所以这个表达式的作用是：保留所有空格和a-z小写字母，去除其它字符（包括标点符号、大写字母、数字和其它非英语字符）。
         words = re.sub(u'[^\u0020\u0061-\u007a]', '', word.lower()).split(' ')
         # hello!! \n\n
         filtered_words = [w for w in words if len(w) > 0]
